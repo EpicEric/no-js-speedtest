@@ -3,7 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <title>HTTP shenanigans</title>
+    <style>
+      .start-button:active {
+        background-image: url('/{{ id }}/start.jpg');
+      }
+    </style>
   </head>
   <body>
-    <p class="p-1">Hello, world! {{ id }}</p>
-    <ul>
+    <h1>NoJS Speedtest</h1>
+    <button class="start-button" type="button">Start!</button>

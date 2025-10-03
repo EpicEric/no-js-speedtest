@@ -2,24 +2,26 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
     task::ready,
-    time::Duration,
 };
 
 use askama::Template;
 use axum::{
-    Router, body::Body, extract::State, http::header, response::IntoResponse, routing::get,
+    Router,
+    body::Body,
+    extract::{Path, State},
+    http::header,
+    response::IntoResponse,
+    routing::get,
 };
 use bytes::Bytes;
 use http_body::{Body as HttpBody, Frame};
-use tokio::{
-    sync::mpsc::{self, Sender},
-    time::sleep,
-};
+use tokio::sync::mpsc::{self, Sender};
 use uuid::Uuid;
 
 struct StreamingBody {
-    id: Uuid,
     rx: mpsc::Receiver<Bytes>,
+    state: AppState,
+    id: Uuid,
 }
 
 impl HttpBody for StreamingBody {
@@ -36,9 +38,29 @@ impl HttpBody for StreamingBody {
     }
 }
 
+impl Drop for StreamingBody {
+    fn drop(&mut self) {
+        self.state.remove(self.id);
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
     conn: Arc<Mutex<HashMap<Uuid, Sender<Bytes>>>>,
+}
+
+impl AppState {
+    fn insert(&self, id: Uuid, tx: Sender<Bytes>) {
+        self.conn.lock().unwrap().insert(id, tx);
+    }
+
+    fn get(&self, id: Uuid) -> Option<Sender<Bytes>> {
+        self.conn.lock().unwrap().get(&id).cloned()
+    }
+
+    fn remove(&self, id: Uuid) {
+        self.conn.lock().unwrap().remove(&id);
+    }
 }
 
 #[derive(Template)]
@@ -48,40 +70,37 @@ struct IndexTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "item.html")]
-struct ItemTemplate {
-    value: usize,
-}
+#[template(path = "start.html")]
+struct StartTemplate {}
 
 async fn index(State(state): State<AppState>) -> impl IntoResponse {
     let id = Uuid::new_v4();
     let (tx, rx) = mpsc::channel(1024);
-    state.conn.lock().unwrap().insert(id, tx.clone());
-    tokio::spawn(async move {
-        let html = IndexTemplate { id };
-        tx.send(Bytes::from(html.render().unwrap())).await.unwrap();
-        let mut value = 1;
-        loop {
-            let html = ItemTemplate { value };
-            let Ok(_) = tx.send(Bytes::from(html.render().unwrap())).await else {
-                break;
-            };
-            value += 1;
-            sleep(Duration::from_millis(100)).await;
-        }
-    });
+    state.insert(id, tx.clone());
+    let html = IndexTemplate { id };
+    let _ = tx.send(Bytes::from(html.render().unwrap())).await;
     (
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
         [(header::TRANSFER_ENCODING, "chunked")],
-        Body::new(StreamingBody { id, rx }),
+        Body::new(StreamingBody { rx, state, id }),
     )
+}
+
+async fn start(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
+    if let Some(tx) = state.get(id) {
+        let html = StartTemplate {};
+        let _ = tx.send(Bytes::from(html.render().unwrap())).await;
+    }
 }
 
 #[tokio::main]
 async fn main() {
-    let app = Router::new().route("/", get(index)).with_state(AppState {
-        conn: Arc::default(),
-    });
+    let app = Router::new()
+        .route("/", get(index))
+        .route("/{id}/start.jpg", get(start))
+        .with_state(AppState {
+            conn: Arc::default(),
+        });
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Listening on http://0.0.0.0:3000");
