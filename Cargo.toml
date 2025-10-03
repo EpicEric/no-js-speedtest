@@ -1,0 +1,16 @@
+[package]
+name = "speedtest-no-js"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Eric Rodrigues Pires <eric@eric.dev.br>"]
+
+[dependencies]
+askama = "0.14.0"
+axum = "0.8.6"
+bytes = "1.10.1"
+color-eyre = "0.6.5"
+http-body = "1.0.1"
+tokio = { version = "1.47.1", features = ["full"] }
+tower = "0.5.2"
+uuid = { version = "1.18.1", features = ["v4"] }
