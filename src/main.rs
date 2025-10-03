@@ -1,7 +1,8 @@
 use std::{
     collections::HashMap,
+    pin::Pin,
     sync::{Arc, Mutex, OnceLock},
-    task::ready,
+    task::{Context, Poll, ready},
 };
 
 use askama::Template;
@@ -15,6 +16,7 @@ use axum::{
 };
 use bytes::Bytes;
 use http_body::{Body as HttpBody, Frame};
+use image::{ExtendedColorType, codecs::bmp::BmpEncoder};
 use rand::RngCore;
 use serde::Deserialize;
 use tokio::sync::mpsc::{self, Sender};
@@ -32,16 +34,17 @@ impl HttpBody for StreamingBody {
     type Error = color_eyre::Report;
 
     fn poll_frame(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let msg = ready!(self.rx.poll_recv(cx));
-        std::task::Poll::Ready(msg.map(|bytes| Ok(Frame::data(bytes))))
+        Poll::Ready(msg.map(|bytes| Ok(Frame::data(bytes))))
     }
 }
 
 impl Drop for StreamingBody {
     fn drop(&mut self) {
+        println!("Disconnecting {}.", self.id);
         self.state.remove(self.id);
     }
 }
@@ -107,6 +110,7 @@ struct IndexTemplate {
 
 async fn index(State(state): State<AppState>) -> impl IntoResponse {
     let id = Uuid::new_v4();
+    println!("Connecting {id}...");
     let (tx, rx) = mpsc::channel(1024);
     state.insert(id, tx.clone());
     let html = IndexTemplate { id };
@@ -142,6 +146,7 @@ struct DownloadTemplate {
 #[derive(Deserialize)]
 struct DownloadQuery {
     i: usize,
+    size: usize,
 }
 
 struct DownloadBody {
@@ -158,15 +163,15 @@ impl HttpBody for DownloadBody {
     type Error = color_eyre::Report;
 
     fn poll_frame(
-        mut self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         if self.is_end_stream {
-            std::task::Poll::Ready(None)
+            Poll::Ready(None)
         } else {
             self.is_end_stream = true;
-            std::task::Poll::Ready(Some(Ok(Frame::data(
-                RANDOM_BYTES.get().unwrap().slice(0..self.size),
+            Poll::Ready(Some(Ok(Frame::data(
+                RANDOM_BITMAP.get().unwrap().slice(0..self.size),
             ))))
         }
     }
@@ -185,10 +190,10 @@ impl Drop for DownloadBody {
         if let Some(tx) = self.state.get_if_download(self.id) {
             let html = DownloadTemplate {
                 id: self.id,
-                next_size: match self.size {
-                    ..20_000_000 => 20_000_000,
-                    20_000_000..50_000_000 => 50_000_000,
-                    50_000_000.. => 100_000_000,
+                next_size: match self.counter {
+                    0 => 20_000_000,
+                    1 => 50_000_000,
+                    2.. => 100_000_000,
                 },
                 counter: self.counter + 1,
             };
@@ -199,34 +204,46 @@ impl Drop for DownloadBody {
 
 async fn download(
     State(state): State<AppState>,
-    Path((id, size)): Path<(Uuid, usize)>,
-    Query(DownloadQuery { i: counter }): Query<DownloadQuery>,
+    Path(id): Path<Uuid>,
+    Query(DownloadQuery { size, i: counter }): Query<DownloadQuery>,
 ) -> impl IntoResponse {
-    Body::new(DownloadBody {
-        state,
-        id,
-        size,
-        counter,
-        is_end_stream: false,
-    })
+    (
+        [(header::CONTENT_TYPE, "image/bmp")],
+        Body::new(DownloadBody {
+            state,
+            id,
+            size,
+            counter,
+            is_end_stream: false,
+        }),
+    )
 }
 
-static RANDOM_BYTES: OnceLock<Bytes> = OnceLock::new();
+static RANDOM_BITMAP: OnceLock<Bytes> = OnceLock::new();
 
 #[tokio::main]
-async fn main() {
+async fn main() -> color_eyre::Result<()> {
     println!("Initializing random data...");
+    let mut random_image = vec![];
+    let mut encoder = BmpEncoder::new(&mut random_image);
     let mut random_data = vec![0u8; 100_000_000];
     rand::rng().fill_bytes(&mut random_data);
-    RANDOM_BYTES
-        .set(Bytes::from_static(random_data.leak()))
+    assert!(
+        encoder
+            .encode(&random_data[..], 5_000, 5_000, ExtendedColorType::Rgba8)
+            .is_ok(),
+        "failed to encode bitmap"
+    );
+    drop(random_data);
+    RANDOM_BITMAP
+        .set(Bytes::from_static(random_image.leak()))
         .unwrap();
 
     let app = Router::new()
         .route("/", get(index))
         .route("/empty.jpg", get(async || {}))
         .route("/{id}/start.jpg", get(start))
-        .route("/{id}/download/{size}/0.jpg", get(download))
+        .route("/{id}/download.bmp", get(download))
         .with_state(AppState {
             conn: Arc::default(),
         });
@@ -234,4 +251,5 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Listening on http://0.0.0.0:3000");
     axum::serve(listener, app).await.unwrap();
+    Ok(())
 }
