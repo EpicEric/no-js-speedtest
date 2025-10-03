@@ -2,5 +2,19 @@
   .start-button {
     display: none;
   }
+
+  .download-image {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+    background-image: url("/{{ id }}/download/10000000/0.jpg?i=0");
+  }
 </style>
-<p>Downloading...</p>
+<p class="download-text">Downloading...</p>
+<div class="download-image"></div>
