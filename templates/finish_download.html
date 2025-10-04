@@ -2,19 +2,15 @@
   .download-image {
     background-image: url("/empty.jpg");
   }
-  .download-speed::after {
-    content: "{{ download_speed }}";
-  }
-  .download-latency::after {
-    content: "{{ download_latency }}";
-  }
-  .status-text::after {
-    content: "Finished test!";
-  }
-  .download-progress-bar {
+  .download {
     display: none;
   }
 </style>
-<form action="/" method="get">
-  <button type="submit">Start over</button>
-</form>
+<article class="results">
+  <p class="status-text">Finished test!</p>
+  <p class="download-speed">Download: {{ download_speed }}</p>
+  <p class="download-latency">Latency: {{ download_latency }}</p>
+  <form action="/" method="get">
+    <button type="submit">Start over</button>
+  </form>
+</article>

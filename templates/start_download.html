@@ -1,0 +1,36 @@
+<style>
+  .start-button {
+    display: none;
+  }
+  .download-image {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+    background-image: url("/{{ id }}/download.bmp?size=10000000&i=0");
+  }
+  .download-progress-bar-fill {
+    height: 1rem;
+    background-color: #00aaff;
+    transition: width;
+    animation: download-progress {{ test_duration }}s normal forwards linear;
+  }
+  @keyframes download-progress {
+    0% { width: 0%; }
+    100% { width: 100%; }
+  }
+</style>
+<article class="download">
+  <p class="status-text">Downloading...</p>
+  <div class="download-speed" aria-label="Current download speed"></div>
+  <div class="download-latency" aria-label="Current download latency"></div>
+  <div class="download-progress-bar" aria-label="Download progress bar">
+    <div class="download-progress-bar-fill" aria-hidden="true"></div>
+  </div>
+  <div class="download-image" aria-hidden="true"></div>
+</article>

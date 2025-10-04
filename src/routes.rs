@@ -19,7 +19,7 @@ use uuid::Uuid;
 use crate::{
     download::{DOWNLOAD_TEST_DURATION, DownloadBody},
     session::AppState,
-    templates::{FinishDownloadTemplate, IndexTemplate, StartTemplate},
+    templates::{FinishDownloadTemplate, IndexTemplate, StartDownloadTemplate},
 };
 
 pub(crate) async fn index(
@@ -50,7 +50,7 @@ pub(crate) async fn start(
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     if let Some(sender) = state.start_download(id) {
-        let html = StartTemplate {
+        let html = StartDownloadTemplate {
             id,
             test_duration: DOWNLOAD_TEST_DURATION,
         };

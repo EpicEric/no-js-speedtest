@@ -8,8 +8,8 @@ pub(crate) struct IndexTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "start.html")]
-pub(crate) struct StartTemplate {
+#[template(path = "start_download.html")]
+pub(crate) struct StartDownloadTemplate {
     pub(crate) id: Uuid,
     pub(crate) test_duration: u64,
 }

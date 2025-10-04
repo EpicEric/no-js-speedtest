@@ -35,37 +35,39 @@ impl HttpBody for DownloadBody {
         _cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         if self.is_end_stream {
-            if let Some((sender, download_speed, download_latency, instant)) = self
-                .state
-                .measure_download_bandwidth(self.id, self.instant, self.size)
-            {
-                let id = self.id;
-                let next_size = match self.counter {
-                    0 => 20_000_000,
-                    1 => 30_000_000,
-                    2 => 40_000_000,
-                    3 => 50_000_000,
-                    4 => 60_000_000,
-                    5 => 70_000_000,
-                    6 => 80_000_000,
-                    7 => 90_000_000,
-                    8.. => 100_000_000,
-                };
-                let counter = self.counter + 1;
-                tokio::spawn(async move {
+            let id = self.id;
+            let instant = self.instant;
+            let size = self.size;
+            let state = self.state.clone();
+            let counter = self.counter;
+            tokio::spawn(async move {
+                if let Some((sender, download_speed, download_latency, instant)) =
+                    state.measure_download_bandwidth(id, instant, size)
+                {
+                    let next_size = match counter {
+                        0 => 20_000_000,
+                        1 => 30_000_000,
+                        2 => 40_000_000,
+                        3 => 50_000_000,
+                        4 => 60_000_000,
+                        5 => 70_000_000,
+                        6 => 80_000_000,
+                        7 => 90_000_000,
+                        8.. => 100_000_000,
+                    };
                     if let Some(permit) = sender.reserve().await {
                         let html = DownloadTemplate {
                             id,
                             next_size,
-                            counter,
+                            counter: counter + 1,
                             download_speed,
                             download_latency,
                             timestamp: instant.elapsed().as_secs_f64(),
                         };
                         permit.send(Bytes::from(html.render().unwrap()));
                     }
-                });
-            }
+                }
+            });
             Poll::Ready(None)
         } else {
             self.is_end_stream = true;
