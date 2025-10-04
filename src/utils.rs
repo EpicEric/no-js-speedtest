@@ -1,11 +1,11 @@
-use std::time::Instant;
+use std::time::Duration;
 
-pub(crate) fn calculate_bps(instant: Instant, size: usize) -> f64 {
-    (size as f64 / instant.elapsed().as_secs_f64()) * 8.0
+pub(crate) fn calculate_bps(duration: Duration, size: usize) -> f64 {
+    (size as f64 / duration.as_secs_f64()) * 8.0
 }
 
-pub(crate) fn calculate_bandwidth_weight(start: Instant, size: usize) -> f64 {
-    ((size / 5_000_000) as f64) * start.elapsed().as_secs_f64()
+pub(crate) fn calculate_bandwidth_weight(duration: Duration, size: usize) -> f64 {
+    ((size / 5_000_000) as f64) * duration.as_secs_f64()
 }
 
 static SPEED_SUFFIX: [&str; 9] = [

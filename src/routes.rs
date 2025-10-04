@@ -79,7 +79,7 @@ pub(crate) async fn download(
     }): Query<DownloadQuery>,
 ) -> impl IntoResponse {
     if let Some(timestamp) = ts {
-        state.measure_download_latency(id, timestamp);
+        state.measure_download_latency(id, timestamp, counter);
     }
     (
         [(header::CONTENT_TYPE, "image/bmp")],

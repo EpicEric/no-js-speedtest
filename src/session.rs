@@ -54,6 +54,7 @@ pub(crate) enum SessionState {
     Start,
     Downloading {
         start: Instant,
+        counter: usize,
         bandwidth_average: f64,
         bandwidth_total_weights: f64,
         latency_average: f64,
@@ -128,6 +129,7 @@ impl AppState {
         {
             *state = SessionState::Downloading {
                 start: Instant::now(),
+                counter: 0,
                 bandwidth_average: 0.0,
                 bandwidth_total_weights: 0.0,
                 latency_average: 0.0,
@@ -139,19 +141,22 @@ impl AppState {
         }
     }
 
-    pub(crate) fn measure_download_latency(&self, id: Uuid, timestamp: f64) {
+    pub(crate) fn measure_download_latency(&self, id: Uuid, timestamp: f64, counter: usize) {
         if let Some(mut session_data) = self.conn.get_mut(&id)
             && let SessionData { state, .. } = session_data.value_mut()
             && let SessionState::Downloading {
                 start,
+                counter: session_counter,
                 latency_average: average,
                 latency_total_weights: total_weights,
                 ..
             } = state
+            && counter >= *session_counter
         {
             let latency = (start.elapsed().as_secs_f64() - timestamp) / 2.0;
             let new_weights = *total_weights + 1.0;
             let new_average = (*average * *total_weights + latency) / new_weights;
+            *session_counter = counter;
             *average = new_average;
             *total_weights = new_weights;
         }
@@ -173,8 +178,8 @@ impl AppState {
                 ..
             } = state
         {
-            let speed = calculate_bps(instant, size);
-            let weight = calculate_bandwidth_weight(*start, size);
+            let speed = calculate_bps(instant.elapsed(), size);
+            let weight = calculate_bandwidth_weight(start.elapsed(), size);
             let new_weights = *total_weights + weight;
             let new_average = (*average * *total_weights + speed * weight) / new_weights;
             *average = new_average;
