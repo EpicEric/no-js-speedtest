@@ -14,19 +14,27 @@
     border-width: 0;
     background-image: url("/{{ id }}/download.bmp?size=5000000&i=0");
   }
+  .download-text {
+    color: rgb(13, 16, 19);
+  }
   .download-text::after {
     content: "Downloading...";
+  }
+  .download-speed {
+    padding: 0.25rem;
+    font-size: 1.125rem;
   }
   .download-speed::after {
     content: "--";
   }
   .download-progress-bar {
-    width: 200px;
-    border: 1px solid rgb(0, 85, 150);
-    border-radius: 3px;
+    margin: 0.25rem 0;
+    width: 12rem;
+    border: 0.125rem solid rgb(0, 85, 150);
+    border-radius: 0.25rem;
   }
   .download-progress-bar-fill {
-    height: 10px;
+    height: 1rem;
     background-color: #00aaff;
     transition: width;
     animation: download-progress {{ test_duration }}s normal forwards linear;
