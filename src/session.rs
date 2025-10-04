@@ -216,7 +216,7 @@ impl AppState {
     pub(crate) async fn finish(&self, id: Uuid) {
         if let Some(mut session_data) = self.conn.get_mut(&id)
             && let SessionData { state, sender, .. } = session_data.value_mut()
-            && let SessionState::End { .. } = state
+            && let SessionState::End = state
         {
             sender.finish().await;
         }
