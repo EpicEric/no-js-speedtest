@@ -2,4 +2,7 @@
   .download-image {
     background-image: url("/{{ id }}/download.bmp?size={{ next_size }}&i={{ counter }}");
   }
+  .download-speed::after {
+    content: "{{ download_speed }}";
+  }
 </style>

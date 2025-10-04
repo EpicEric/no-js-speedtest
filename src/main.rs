@@ -1,239 +1,61 @@
-use std::{
-    collections::HashMap,
-    pin::Pin,
-    sync::{Arc, Mutex, OnceLock},
-    task::{Context, Poll, ready},
-};
+use std::{net::SocketAddr, sync::Arc};
 
-use askama::Template;
-use axum::{
-    Router,
-    body::Body,
-    extract::{Path, Query, State},
-    http::header,
-    response::IntoResponse,
-    routing::get,
-};
+use axum::{Router, routing::get};
 use bytes::Bytes;
-use http_body::{Body as HttpBody, Frame};
+use color_eyre::eyre::{Context, eyre};
 use image::{ExtendedColorType, codecs::bmp::BmpEncoder};
 use rand::RngCore;
-use serde::Deserialize;
-use tokio::sync::mpsc::{self, Sender};
-use uuid::Uuid;
+use tracing::{error, info};
+use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
-struct StreamingBody {
-    rx: mpsc::Receiver<Bytes>,
-    state: AppState,
-    id: Uuid,
-}
+use crate::{
+    download::RANDOM_BITMAP,
+    routes::{download, index, start},
+    session::AppState,
+};
 
-impl HttpBody for StreamingBody {
-    type Data = Bytes;
-
-    type Error = color_eyre::Report;
-
-    fn poll_frame(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        let msg = ready!(self.rx.poll_recv(cx));
-        Poll::Ready(msg.map(|bytes| Ok(Frame::data(bytes))))
-    }
-}
-
-impl Drop for StreamingBody {
-    fn drop(&mut self) {
-        println!("Disconnecting {}.", self.id);
-        self.state.remove(self.id);
-    }
-}
-
-enum SessionState {
-    Start,
-    Downloading,
-    Uploading,
-    End,
-}
-
-struct SessionData {
-    state: SessionState,
-    tx: Sender<Bytes>,
-}
-
-#[derive(Clone)]
-struct AppState {
-    conn: Arc<Mutex<HashMap<Uuid, SessionData>>>,
-}
-
-impl AppState {
-    fn insert(&self, id: Uuid, tx: Sender<Bytes>) {
-        self.conn.lock().unwrap().insert(
-            id,
-            SessionData {
-                state: SessionState::Start,
-                tx,
-            },
-        );
-    }
-
-    fn start_download(&self, id: Uuid) -> Option<Sender<Bytes>> {
-        match self.conn.lock().unwrap().get_mut(&id) {
-            Some(SessionData { state, tx }) => {
-                *state = SessionState::Downloading;
-                Some(tx.clone())
-            }
-            _ => None,
-        }
-    }
-
-    fn get_if_download(&self, id: Uuid) -> Option<Sender<Bytes>> {
-        match self.conn.lock().unwrap().get(&id) {
-            Some(SessionData {
-                state: SessionState::Downloading,
-                tx,
-            }) => Some(tx.clone()),
-            _ => None,
-        }
-    }
-
-    fn remove(&self, id: Uuid) {
-        self.conn.lock().unwrap().remove(&id);
-    }
-}
-
-#[derive(Template)]
-#[template(path = "index.html")]
-struct IndexTemplate {
-    id: Uuid,
-}
-
-async fn index(State(state): State<AppState>) -> impl IntoResponse {
-    let id = Uuid::new_v4();
-    println!("Connecting {id}...");
-    let (tx, rx) = mpsc::channel(1024);
-    state.insert(id, tx.clone());
-    let html = IndexTemplate { id };
-    let _ = tx.send(Bytes::from(html.render().unwrap())).await;
-    (
-        [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        [(header::TRANSFER_ENCODING, "chunked")],
-        Body::new(StreamingBody { rx, state, id }),
-    )
-}
-
-#[derive(Template)]
-#[template(path = "start.html")]
-struct StartTemplate {
-    id: Uuid,
-}
-
-async fn start(State(state): State<AppState>, Path(id): Path<Uuid>) -> impl IntoResponse {
-    if let Some(tx) = state.start_download(id) {
-        let html = StartTemplate { id };
-        let _ = tx.send(Bytes::from(html.render().unwrap())).await;
-    }
-}
-
-#[derive(Template)]
-#[template(path = "download.html")]
-struct DownloadTemplate {
-    id: Uuid,
-    next_size: usize,
-    counter: usize,
-}
-
-#[derive(Deserialize)]
-struct DownloadQuery {
-    i: usize,
-    size: usize,
-}
-
-struct DownloadBody {
-    state: AppState,
-    id: Uuid,
-    size: usize,
-    counter: usize,
-    is_end_stream: bool,
-}
-
-impl HttpBody for DownloadBody {
-    type Data = Bytes;
-
-    type Error = color_eyre::Report;
-
-    fn poll_frame(
-        mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        if self.is_end_stream {
-            Poll::Ready(None)
-        } else {
-            self.is_end_stream = true;
-            Poll::Ready(Some(Ok(Frame::data(
-                RANDOM_BITMAP.get().unwrap().slice(0..self.size),
-            ))))
-        }
-    }
-
-    fn size_hint(&self) -> http_body::SizeHint {
-        http_body::SizeHint::with_exact(self.size as u64)
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.is_end_stream
-    }
-}
-
-impl Drop for DownloadBody {
-    fn drop(&mut self) {
-        if let Some(tx) = self.state.get_if_download(self.id) {
-            let html = DownloadTemplate {
-                id: self.id,
-                next_size: match self.counter {
-                    0 => 20_000_000,
-                    1 => 50_000_000,
-                    2.. => 100_000_000,
-                },
-                counter: self.counter + 1,
-            };
-            let _ = tx.try_send(Bytes::from(html.render().unwrap()));
-        }
-    }
-}
-
-async fn download(
-    State(state): State<AppState>,
-    Path(id): Path<Uuid>,
-    Query(DownloadQuery { size, i: counter }): Query<DownloadQuery>,
-) -> impl IntoResponse {
-    (
-        [(header::CONTENT_TYPE, "image/bmp")],
-        Body::new(DownloadBody {
-            state,
-            id,
-            size,
-            counter,
-            is_end_stream: false,
-        }),
-    )
-}
-
-static RANDOM_BITMAP: OnceLock<Bytes> = OnceLock::new();
+mod download;
+mod routes;
+mod session;
+mod templates;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
-    println!("Initializing random data...");
+    color_eyre::install()?;
+
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::fmt::Layer::default()
+                .compact()
+                .with_timer(tracing_subscriber::fmt::time::ChronoUtc::rfc_3339())
+                .with_filter(
+                    tracing_subscriber::EnvFilter::builder()
+                        .with_default_directive(tracing::level_filters::LevelFilter::INFO.into())
+                        .from_env_lossy(),
+                ),
+        )
+        .with(tracing_error::ErrorLayer::default())
+        .try_init()
+        .wrap_err_with(|| "failed to initialize tracing")?;
+
+    let size = 100_000_000;
+    let width = 5_000;
+    let height = 5_000;
+    if ExtendedColorType::Rgba8.bits_per_pixel() as usize * width as usize * height as usize
+        != 8 * size
+    {
+        error!(size, width, height, "Invalid dimensions");
+        return Err(eyre!("Cannot initialize random data (invalid dimensions)"));
+    }
+
+    info!(size, width, height, "Initializing random data...");
     let mut random_image = vec![];
     let mut encoder = BmpEncoder::new(&mut random_image);
-    let mut random_data = vec![0u8; 100_000_000];
+    let mut random_data = vec![0u8; size];
     rand::rng().fill_bytes(&mut random_data);
-    assert!(
-        encoder
-            .encode(&random_data[..], 5_000, 5_000, ExtendedColorType::Rgba8)
-            .is_ok(),
-        "failed to encode bitmap"
-    );
+    encoder
+        .encode(&random_data[..], width, height, ExtendedColorType::Rgba8)
+        .wrap_err_with(|| "failed to encode bitmap")?;
     drop(random_data);
     RANDOM_BITMAP
         .set(Bytes::from_static(random_image.leak()))
@@ -248,8 +70,14 @@ async fn main() -> color_eyre::Result<()> {
             conn: Arc::default(),
         });
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Listening on http://0.0.0.0:3000");
-    axum::serve(listener, app).await.unwrap();
-    Ok(())
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .wrap_err_with(|| "failed to listen on port 3000")?;
+    info!(address = "http://0.0.0.0:3000", "Starting server...");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .wrap_err_with(|| "server closed")
 }
