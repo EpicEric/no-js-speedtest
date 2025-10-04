@@ -38,6 +38,13 @@ pub(crate) async fn index(
     )
 }
 
+pub(crate) async fn favicon() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "image/png")],
+        include_bytes!("./favicon.png"),
+    )
+}
+
 pub(crate) async fn start(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
