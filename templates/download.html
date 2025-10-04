@@ -1,8 +1,11 @@
 <style>
   .download-image {
-    background-image: url("/{{ id }}/download.bmp?size={{ next_size }}&i={{ counter }}");
+    background-image: url("/{{ id }}/download.bmp?size={{ next_size }}&i={{ counter }}&ts={{ timestamp }}");
   }
   .download-speed::after {
     content: "{{ download_speed }}";
+  }
+  .download-latency::after {
+    content: "{{ download_latency }}";
   }
 </style>

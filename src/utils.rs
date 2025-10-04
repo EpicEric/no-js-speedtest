@@ -4,7 +4,7 @@ pub(crate) fn calculate_bps(instant: Instant, size: usize) -> f64 {
     (size as f64 / instant.elapsed().as_secs_f64()) * 8.0
 }
 
-pub(crate) fn calculate_weight(start: Instant, size: usize) -> f64 {
+pub(crate) fn calculate_bandwidth_weight(start: Instant, size: usize) -> f64 {
     ((size / 5_000_000) as f64) * start.elapsed().as_secs_f64()
 }
 
@@ -23,5 +23,15 @@ pub(crate) fn bps_to_string(mut speed: f64) -> String {
         0.0..10.0 => format!("{:.2}{}", speed, SPEED_SUFFIX[order_of_magnitude]),
         10.0..100.0 => format!("{:.1}{}", speed, SPEED_SUFFIX[order_of_magnitude]),
         _ => format!("{}{}", speed as u64, SPEED_SUFFIX[order_of_magnitude]),
+    }
+}
+
+pub(crate) fn seconds_to_string(latency: f64) -> String {
+    debug_assert!(latency >= 0.0, "speed must be positive");
+    let latency_ms = latency * 1_000.0;
+    match latency_ms {
+        0.0..10.0 => format!("{:.2}ms", latency_ms),
+        10.0..100.0 => format!("{:.1}ms", latency_ms),
+        _ => format!("{}ms", latency_ms as u64),
     }
 }

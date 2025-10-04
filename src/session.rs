@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::utils::{bps_to_string, calculate_bps, calculate_weight};
+use crate::utils::{bps_to_string, calculate_bandwidth_weight, calculate_bps, seconds_to_string};
 
 pub(crate) struct StreamingBody {
     rx: mpsc::Receiver<Bytes>,
@@ -54,12 +54,12 @@ pub(crate) enum SessionState {
     Start,
     Downloading {
         start: Instant,
-        average: f64,
-        total_weights: f64,
+        bandwidth_average: f64,
+        bandwidth_total_weights: f64,
+        latency_average: f64,
+        latency_total_weights: f64,
     },
-    End {
-        _download: String,
-    },
+    End,
 }
 
 pub(crate) struct SessionData {
@@ -104,8 +104,10 @@ impl AppState {
         {
             *state = SessionState::Downloading {
                 start: Instant::now(),
-                average: 0.0,
-                total_weights: 0.0,
+                bandwidth_average: 0.0,
+                bandwidth_total_weights: 0.0,
+                latency_average: 0.0,
+                latency_total_weights: 0.0,
             };
             Some(tx.clone())
         } else {
@@ -113,41 +115,73 @@ impl AppState {
         }
     }
 
-    pub(crate) fn measure_download(
+    pub(crate) fn measure_download_latency(&self, id: Uuid, timestamp: f64) {
+        if let Some(mut session_data) = self.conn.get_mut(&id)
+            && let SessionData { state, .. } = session_data.value_mut()
+            && let SessionState::Downloading {
+                start,
+                latency_average: average,
+                latency_total_weights: total_weights,
+                ..
+            } = state
+        {
+            let latency = start.elapsed().as_secs_f64() - timestamp;
+            println!("latency: {latency}");
+            let new_weights = *total_weights + 1.0;
+            let new_average = (*average * *total_weights + latency) / new_weights;
+            *average = new_average;
+            *total_weights = new_weights;
+        }
+    }
+
+    pub(crate) fn measure_download_bandwidth(
         &self,
         id: Uuid,
         instant: Instant,
         size: usize,
-    ) -> Option<(mpsc::Sender<Bytes>, String)> {
+    ) -> Option<(mpsc::Sender<Bytes>, String, String, f64)> {
         if let Some(mut session_data) = self.conn.get_mut(&id)
             && let SessionData { state, tx, .. } = session_data.value_mut()
             && let SessionState::Downloading {
                 start,
-                average,
-                total_weights,
+                bandwidth_average: average,
+                bandwidth_total_weights: total_weights,
+                latency_average,
                 ..
             } = state
         {
             let speed = calculate_bps(instant, size);
-            let weight = calculate_weight(*start, size);
+            let weight = calculate_bandwidth_weight(*start, size);
             let new_weights = *total_weights + weight;
             let new_average = (*average * *total_weights + speed * weight) / new_weights;
             *average = new_average;
             *total_weights = new_weights;
-            Some((tx.clone(), bps_to_string(*average)))
+            Some((
+                tx.clone(),
+                bps_to_string(*average),
+                seconds_to_string(*latency_average),
+                start.elapsed().as_secs_f64(),
+            ))
         } else {
             None
         }
     }
 
-    pub(crate) fn stop_download(&self, id: Uuid) {
+    pub(crate) fn stop_download(&self, id: Uuid) -> Option<(String, String)> {
         if let Some(mut session_data) = self.conn.get_mut(&id)
             && let SessionData { state, .. } = session_data.value_mut()
-            && let SessionState::Downloading { average, .. } = state
+            && let SessionState::Downloading {
+                bandwidth_average,
+                latency_average,
+                ..
+            } = state
         {
-            *state = SessionState::End {
-                _download: bps_to_string(*average),
-            };
+            let download_bandwidth = bps_to_string(*bandwidth_average);
+            let download_latency = seconds_to_string(*latency_average);
+            *state = SessionState::End;
+            Some((download_bandwidth, download_latency))
+        } else {
+            None
         }
     }
 

@@ -2,6 +2,12 @@
   .download-image {
     background-image: url("/empty.jpg");
   }
+  .download-speed::after {
+    content: "{{ download_speed }}";
+  }
+  .download-latency::after {
+    content: "{{ download_latency }}";
+  }
   .download-text::after {
     content: "Finished test!";
   }

@@ -50,10 +50,14 @@ pub(crate) async fn start(
         let _ = tx.send(Bytes::from(html.render().unwrap())).await;
         tokio::spawn(async move {
             sleep(Duration::from_secs(DOWNLOAD_TEST_DURATION)).await;
-            state.stop_download(id);
-            let html = FinishDownloadTemplate {};
-            let _ = tx.try_send(Bytes::from(html.render().unwrap()));
-            state.finish(id);
+            if let Some((download_speed, download_latency)) = state.stop_download(id) {
+                let html = FinishDownloadTemplate {
+                    download_speed,
+                    download_latency,
+                };
+                let _ = tx.try_send(Bytes::from(html.render().unwrap()));
+                state.finish(id);
+            }
         });
     }
 }
@@ -62,13 +66,21 @@ pub(crate) async fn start(
 pub(crate) struct DownloadQuery {
     i: usize,
     size: usize,
+    ts: Option<f64>,
 }
 
 pub(crate) async fn download(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-    Query(DownloadQuery { size, i: counter }): Query<DownloadQuery>,
+    Query(DownloadQuery {
+        size,
+        i: counter,
+        ts,
+    }): Query<DownloadQuery>,
 ) -> impl IntoResponse {
+    if let Some(timestamp) = ts {
+        state.measure_download_latency(id, timestamp);
+    }
     (
         [(header::CONTENT_TYPE, "image/bmp")],
         Body::new(DownloadBody {

@@ -55,9 +55,9 @@ impl HttpBody for DownloadBody {
 
 impl Drop for DownloadBody {
     fn drop(&mut self) {
-        if let Some((tx, download_speed)) =
-            self.state
-                .measure_download(self.id, self.instant, self.size)
+        if let Some((tx, download_speed, download_latency, timestamp)) = self
+            .state
+            .measure_download_bandwidth(self.id, self.instant, self.size)
         {
             let html = DownloadTemplate {
                 id: self.id,
@@ -70,6 +70,8 @@ impl Drop for DownloadBody {
                 },
                 counter: self.counter + 1,
                 download_speed,
+                download_latency,
+                timestamp,
             };
             let _ = tx.try_send(Bytes::from(html.render().unwrap()));
         }
