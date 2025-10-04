@@ -5,7 +5,7 @@ pub(crate) fn calculate_bps(duration: Duration, size: usize) -> f64 {
 }
 
 pub(crate) fn calculate_bandwidth_weight(duration: Duration, size: usize) -> f64 {
-    ((size / 5_000_000) as f64) * duration.as_secs_f64()
+    ((size / 1_000_000) as f64) * duration.as_secs_f64()
 }
 
 static SPEED_SUFFIX: [&str; 9] = [

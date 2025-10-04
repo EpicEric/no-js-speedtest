@@ -35,6 +35,37 @@ impl HttpBody for DownloadBody {
         _cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         if self.is_end_stream {
+            if let Some((sender, download_speed, download_latency, instant)) = self
+                .state
+                .measure_download_bandwidth(self.id, self.instant, self.size)
+            {
+                let id = self.id;
+                let next_size = match self.counter {
+                    0 => 20_000_000,
+                    1 => 30_000_000,
+                    2 => 40_000_000,
+                    3 => 50_000_000,
+                    4 => 60_000_000,
+                    5 => 70_000_000,
+                    6 => 80_000_000,
+                    7 => 90_000_000,
+                    8.. => 100_000_000,
+                };
+                let counter = self.counter + 1;
+                tokio::spawn(async move {
+                    if let Some(permit) = sender.reserve().await {
+                        let html = DownloadTemplate {
+                            id,
+                            next_size,
+                            counter,
+                            download_speed,
+                            download_latency,
+                            timestamp: instant.elapsed().as_secs_f64(),
+                        };
+                        permit.send(Bytes::from(html.render().unwrap()));
+                    }
+                });
+            }
             Poll::Ready(None)
         } else {
             self.is_end_stream = true;
@@ -45,42 +76,12 @@ impl HttpBody for DownloadBody {
     }
 
     fn size_hint(&self) -> http_body::SizeHint {
-        http_body::SizeHint::with_exact(self.size as u64)
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.is_end_stream
-    }
-}
-
-impl Drop for DownloadBody {
-    fn drop(&mut self) {
-        if let Some((sender, download_speed, download_latency, instant)) = self
-            .state
-            .measure_download_bandwidth(self.id, self.instant, self.size)
-        {
-            let id = self.id;
-            let next_size = match self.counter {
-                0 => 10_000_000,
-                1 => 25_000_000,
-                2 => 50_000_000,
-                3 => 75_000_000,
-                4.. => 100_000_000,
-            };
-            let counter = self.counter + 1;
-            tokio::spawn(async move {
-                if let Some(permit) = sender.reserve().await {
-                    let html = DownloadTemplate {
-                        id,
-                        next_size,
-                        counter,
-                        download_speed,
-                        download_latency,
-                        timestamp: instant.elapsed().as_secs_f64(),
-                    };
-                    permit.send(Bytes::from(html.render().unwrap()));
-                }
-            });
+        if self.is_end_stream {
+            http_body::SizeHint::default()
+        } else {
+            let mut size_hint = http_body::SizeHint::new();
+            size_hint.set_lower(self.size as u64);
+            size_hint
         }
     }
 }
