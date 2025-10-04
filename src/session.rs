@@ -122,20 +122,21 @@ impl AppState {
         )
     }
 
-    pub(crate) fn start_download(&self, id: Uuid) -> Option<SessionSender> {
+    pub(crate) fn start_download(&self, id: Uuid) -> Option<(SessionSender, Instant)> {
         if let Some(mut session_data) = self.conn.get_mut(&id)
             && let SessionData { state, sender, .. } = session_data.value_mut()
             && let SessionState::Start = state
         {
+            let start = Instant::now();
             *state = SessionState::Downloading {
-                start: Instant::now(),
+                start,
                 counter: 0,
                 bandwidth_average: 0.0,
                 bandwidth_total_weights: 0.0,
                 latency_average: 0.0,
                 latency_total_weights: 0.0,
             };
-            Some(sender.clone())
+            Some((sender.clone(), start))
         } else {
             None
         }

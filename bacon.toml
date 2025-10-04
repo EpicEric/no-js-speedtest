@@ -1,0 +1,6 @@
+[jobs.serve]
+command = ["cargo", "run"]
+background = false
+need_stdout = true
+on_change_strategy = "kill_then_restart"
+watch = ["templates"]

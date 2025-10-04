@@ -49,10 +49,11 @@ pub(crate) async fn start(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    if let Some(sender) = state.start_download(id) {
+    if let Some((sender, start)) = state.start_download(id) {
         let html = StartDownloadTemplate {
             id,
             test_duration: DOWNLOAD_TEST_DURATION,
+            timestamp: start.elapsed().as_secs_f64(),
         };
         sender.send(Bytes::from(html.render().unwrap())).await;
         tokio::spawn(async move {
