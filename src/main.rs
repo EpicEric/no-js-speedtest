@@ -18,6 +18,7 @@ mod download;
 mod routes;
 mod session;
 mod templates;
+mod utils;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {

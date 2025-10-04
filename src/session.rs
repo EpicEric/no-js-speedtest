@@ -14,6 +14,8 @@ use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
 
+use crate::utils::{bps_to_string, calculate_bps, calculate_weight};
+
 pub(crate) struct StreamingBody {
     rx: mpsc::Receiver<Bytes>,
     state: AppState,
@@ -68,31 +70,6 @@ pub(crate) struct SessionData {
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) conn: Arc<DashMap<Uuid, SessionData, RandomState>>,
-}
-
-fn calculate_bps(instant: Instant, size: usize) -> f64 {
-    (size as f64 / instant.elapsed().as_secs_f64()) * 8.0
-}
-
-fn calculate_weight(start: Instant, size: usize) -> f64 {
-    ((size / 5_000_000) as f64) * start.elapsed().as_secs_f64()
-}
-
-static SPEED_SUFFIX: [&str; 9] = [
-    " bps", " Kbps", " Mbps", " Gbps", " Tbps", " Pbps", " Ebps", " Zbps", " Ybps",
-];
-
-fn bps_to_string(mut speed: f64) -> String {
-    let mut order_of_magnitude = 0;
-    while speed > 1_000.0 {
-        order_of_magnitude += 1;
-        speed /= 1_000.0;
-    }
-    match speed {
-        0.0..10.0 => format!("{:.2}{}", speed, SPEED_SUFFIX[order_of_magnitude]),
-        10.0..100.0 => format!("{:.1}{}", speed, SPEED_SUFFIX[order_of_magnitude]),
-        _ => format!("{}{}", speed as u64, SPEED_SUFFIX[order_of_magnitude]),
-    }
 }
 
 impl AppState {
