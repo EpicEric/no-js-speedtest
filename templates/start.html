@@ -14,14 +14,14 @@
     border-width: 0;
     background-image: url("/{{ id }}/download.bmp?size=5000000&i=0");
   }
-  .download-text {
+  .status-text {
     color: rgb(13, 16, 19);
   }
-  .download-text::after {
+  .status-text::after {
     content: "Downloading...";
   }
   .download-speed {
-    padding: 0.25rem;
+    padding: 0.5rem 0 0.25rem;
     font-size: 1.125rem;
   }
   .download-speed::after {
@@ -50,7 +50,7 @@
     100% { width: 100%; }
   }
 </style>
-<p class="download-text"></p>
+<p class="status-text"></p>
 <p class="download-speed"></p>
 <p class="download-latency"></p>
 <div class="download-progress-bar">

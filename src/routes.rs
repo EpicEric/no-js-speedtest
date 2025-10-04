@@ -28,9 +28,9 @@ pub(crate) async fn index(
 ) -> impl IntoResponse {
     let id = Uuid::new_v4();
     info!(%id, %addr, "New connection.");
-    let (tx, body) = state.insert(id, addr);
+    let (sender, body) = state.insert(id, addr);
     let html = IndexTemplate { id };
-    let _ = tx.send(Bytes::from(html.render().unwrap())).await;
+    sender.send(Bytes::from(html.render().unwrap())).await;
     (
         [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
         [(header::TRANSFER_ENCODING, "chunked")],
@@ -42,12 +42,12 @@ pub(crate) async fn start(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    if let Some(tx) = state.start_download(id) {
+    if let Some(sender) = state.start_download(id) {
         let html = StartTemplate {
             id,
             test_duration: DOWNLOAD_TEST_DURATION,
         };
-        let _ = tx.send(Bytes::from(html.render().unwrap())).await;
+        sender.send(Bytes::from(html.render().unwrap())).await;
         tokio::spawn(async move {
             sleep(Duration::from_secs(DOWNLOAD_TEST_DURATION)).await;
             if let Some((download_speed, download_latency)) = state.stop_download(id) {
@@ -55,8 +55,8 @@ pub(crate) async fn start(
                     download_speed,
                     download_latency,
                 };
-                let _ = tx.try_send(Bytes::from(html.render().unwrap()));
-                state.finish(id);
+                sender.send(Bytes::from(html.render().unwrap())).await;
+                state.finish(id).await;
             }
         });
     }

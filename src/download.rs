@@ -55,25 +55,32 @@ impl HttpBody for DownloadBody {
 
 impl Drop for DownloadBody {
     fn drop(&mut self) {
-        if let Some((tx, download_speed, download_latency, timestamp)) = self
+        if let Some((sender, download_speed, download_latency, instant)) = self
             .state
             .measure_download_bandwidth(self.id, self.instant, self.size)
         {
-            let html = DownloadTemplate {
-                id: self.id,
-                next_size: match self.counter {
-                    0 => 10_000_000,
-                    1 => 25_000_000,
-                    2 => 50_000_000,
-                    3 => 75_000_000,
-                    4.. => 100_000_000,
-                },
-                counter: self.counter + 1,
-                download_speed,
-                download_latency,
-                timestamp,
+            let id = self.id;
+            let next_size = match self.counter {
+                0 => 10_000_000,
+                1 => 25_000_000,
+                2 => 50_000_000,
+                3 => 75_000_000,
+                4.. => 100_000_000,
             };
-            let _ = tx.try_send(Bytes::from(html.render().unwrap()));
+            let counter = self.counter + 1;
+            tokio::spawn(async move {
+                if let Some(permit) = sender.reserve().await {
+                    let html = DownloadTemplate {
+                        id,
+                        next_size,
+                        counter,
+                        download_speed,
+                        download_latency,
+                        timestamp: instant.elapsed().as_secs_f64(),
+                    };
+                    permit.send(Bytes::from(html.render().unwrap()));
+                }
+            });
         }
     }
 }

@@ -62,9 +62,36 @@ pub(crate) enum SessionState {
     End,
 }
 
+#[derive(Clone)]
+pub(crate) struct SessionSender(mpsc::Sender<Bytes>);
+
+pub(crate) struct SessionSenderPermit<'a>(mpsc::Permit<'a, Bytes>);
+
+impl SessionSender {
+    pub(crate) async fn send(&self, bytes: Bytes) {
+        debug_assert!(!bytes.is_empty(), "cannot send empty bytes");
+        let _ = self.0.send(bytes).await;
+    }
+
+    pub(crate) async fn reserve(&self) -> Option<SessionSenderPermit<'_>> {
+        self.0.reserve().await.ok().map(SessionSenderPermit)
+    }
+
+    async fn finish(&self) {
+        let _ = self.0.send(Bytes::new()).await;
+    }
+}
+
+impl<'a> SessionSenderPermit<'a> {
+    pub(crate) fn send(self, bytes: Bytes) {
+        debug_assert!(!bytes.is_empty(), "cannot send empty bytes");
+        self.0.send(bytes);
+    }
+}
+
 pub(crate) struct SessionData {
     state: SessionState,
-    tx: mpsc::Sender<Bytes>,
+    sender: SessionSender,
 }
 
 #[derive(Clone)]
@@ -73,21 +100,18 @@ pub(crate) struct AppState {
 }
 
 impl AppState {
-    pub(crate) fn insert(
-        &self,
-        id: Uuid,
-        addr: SocketAddr,
-    ) -> (mpsc::Sender<Bytes>, StreamingBody) {
+    pub(crate) fn insert(&self, id: Uuid, addr: SocketAddr) -> (SessionSender, StreamingBody) {
         let (tx, rx) = mpsc::channel(128);
+        let sender = SessionSender(tx);
         self.conn.insert(
             id,
             SessionData {
                 state: SessionState::Start,
-                tx: tx.clone(),
+                sender: sender.clone(),
             },
         );
         (
-            tx,
+            sender,
             StreamingBody {
                 rx,
                 state: self.clone(),
@@ -97,9 +121,9 @@ impl AppState {
         )
     }
 
-    pub(crate) fn start_download(&self, id: Uuid) -> Option<mpsc::Sender<Bytes>> {
+    pub(crate) fn start_download(&self, id: Uuid) -> Option<SessionSender> {
         if let Some(mut session_data) = self.conn.get_mut(&id)
-            && let SessionData { state, tx, .. } = session_data.value_mut()
+            && let SessionData { state, sender, .. } = session_data.value_mut()
             && let SessionState::Start = state
         {
             *state = SessionState::Downloading {
@@ -109,7 +133,7 @@ impl AppState {
                 latency_average: 0.0,
                 latency_total_weights: 0.0,
             };
-            Some(tx.clone())
+            Some(sender.clone())
         } else {
             None
         }
@@ -125,8 +149,7 @@ impl AppState {
                 ..
             } = state
         {
-            let latency = start.elapsed().as_secs_f64() - timestamp;
-            println!("latency: {latency}");
+            let latency = (start.elapsed().as_secs_f64() - timestamp) / 2.0;
             let new_weights = *total_weights + 1.0;
             let new_average = (*average * *total_weights + latency) / new_weights;
             *average = new_average;
@@ -139,9 +162,9 @@ impl AppState {
         id: Uuid,
         instant: Instant,
         size: usize,
-    ) -> Option<(mpsc::Sender<Bytes>, String, String, f64)> {
+    ) -> Option<(SessionSender, String, String, Instant)> {
         if let Some(mut session_data) = self.conn.get_mut(&id)
-            && let SessionData { state, tx, .. } = session_data.value_mut()
+            && let SessionData { state, sender, .. } = session_data.value_mut()
             && let SessionState::Downloading {
                 start,
                 bandwidth_average: average,
@@ -157,10 +180,10 @@ impl AppState {
             *average = new_average;
             *total_weights = new_weights;
             Some((
-                tx.clone(),
+                sender.clone(),
                 bps_to_string(*average),
                 seconds_to_string(*latency_average),
-                start.elapsed().as_secs_f64(),
+                *start,
             ))
         } else {
             None
@@ -185,12 +208,12 @@ impl AppState {
         }
     }
 
-    pub(crate) fn finish(&self, id: Uuid) {
+    pub(crate) async fn finish(&self, id: Uuid) {
         if let Some(mut session_data) = self.conn.get_mut(&id)
-            && let SessionData { state, tx, .. } = session_data.value_mut()
+            && let SessionData { state, sender, .. } = session_data.value_mut()
             && let SessionState::End { .. } = state
         {
-            let _ = tx.try_send(Bytes::new());
+            sender.finish().await;
         }
     }
 
