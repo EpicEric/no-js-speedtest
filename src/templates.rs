@@ -12,6 +12,7 @@ pub(crate) struct IndexTemplate {
 pub(crate) struct StartDownloadTemplate {
     pub(crate) id: Uuid,
     pub(crate) test_duration: u64,
+    pub(crate) start_size: usize,
     pub(crate) timestamp: f64,
 }
 

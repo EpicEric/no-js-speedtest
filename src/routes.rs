@@ -17,7 +17,7 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::{
-    download::{DOWNLOAD_TEST_DURATION, DownloadBody},
+    download::{DOWNLOAD_START_SIZE, DOWNLOAD_TEST_DURATION, DownloadBody},
     session::AppState,
     templates::{FinishDownloadTemplate, IndexTemplate, StartDownloadTemplate},
 };
@@ -63,6 +63,7 @@ pub(crate) async fn start(
         let html = StartDownloadTemplate {
             id,
             test_duration: DOWNLOAD_TEST_DURATION,
+            start_size: DOWNLOAD_START_SIZE,
             timestamp: start.elapsed().as_secs_f64(),
         };
         sender.send(Bytes::from(html.render().unwrap())).await;
@@ -84,7 +85,7 @@ pub(crate) async fn start(
 pub(crate) struct DownloadQuery {
     i: usize,
     size: usize,
-    ts: Option<f64>,
+    ts: f64,
 }
 
 pub(crate) async fn download(
@@ -93,12 +94,10 @@ pub(crate) async fn download(
     Query(DownloadQuery {
         size,
         i: counter,
-        ts,
+        ts: timestamp,
     }): Query<DownloadQuery>,
 ) -> impl IntoResponse {
-    if let Some(timestamp) = ts {
-        state.measure_download_latency(id, timestamp, counter);
-    }
+    state.measure_download_latency(id, timestamp, counter);
     (
         [(header::CONTENT_TYPE, "image/bmp")],
         Body::new(DownloadBody {

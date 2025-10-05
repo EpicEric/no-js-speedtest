@@ -24,6 +24,7 @@ pub(crate) struct DownloadBody {
 }
 
 pub(crate) static DOWNLOAD_TEST_DURATION: u64 = 15;
+pub(crate) static DOWNLOAD_START_SIZE: usize = 10_000_000;
 
 impl HttpBody for DownloadBody {
     type Data = Bytes;
