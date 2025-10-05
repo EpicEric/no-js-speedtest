@@ -6,9 +6,6 @@
     background-image: url("/{{ id }}/download.bmp?size=10000000&i=0&ts={{ timestamp }}");
   }
   .download-progress-bar-fill {
-    height: 1rem;
-    background-color: #00aaff;
-    transition: width;
     animation: download-progress {{ test_duration }}s normal forwards linear;
   }
   @keyframes download-progress {
@@ -17,9 +14,9 @@
   }
 </style>
 <article class="download">
-  <p class="status-text">Downloading...</p>
-  <div class="download-speed" aria-label="Current download speed"></div>
-  <div class="download-latency" aria-label="Current download latency"></div>
+  <p class="status-text">Testing download...</p>
+  <div class="download-speed">Download:&nbsp;</div>
+  <div class="download-latency">Latency:&nbsp;</div>
   <div class="download-progress-bar" aria-label="Download progress bar">
     <div class="download-progress-bar-fill" aria-hidden="true"></div>
   </div>

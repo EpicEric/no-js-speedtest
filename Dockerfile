@@ -16,7 +16,8 @@ RUN mkdir src \
 # Build application
 COPY src ./src
 COPY templates ./templates
-RUN touch src/main.rs && cargo zigbuild --release --bins --locked --target x86_64-unknown-linux-musl --target aarch64-unknown-linux-musl
+RUN touch src/main.rs \
+  && cargo zigbuild --release --bins --locked --target x86_64-unknown-linux-musl --target aarch64-unknown-linux-musl
 
 # Export compiled binaries to a single image (for both CI artifacts and arch-specific images)
 FROM --platform=$BUILDPLATFORM scratch AS binary
