@@ -7,7 +7,7 @@ use askama::Template;
 use axum::{
     body::Body,
     extract::{ConnectInfo, Path, Query, State},
-    http::header,
+    http::{HeaderMap, header},
     response::IntoResponse,
 };
 use bytes::Bytes;
@@ -25,8 +25,18 @@ use crate::{
 pub(crate) async fn index(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
     let id = Uuid::new_v4();
+    let addr = if let Some(ip) = headers.get("X-Forwarded-For")
+        && let Ok(ip_str) = ip.to_str()
+        && let Some(first_ip_str) = ip_str.split(',').next()
+        && let Ok(ip) = first_ip_str.parse()
+    {
+        ip
+    } else {
+        addr.ip().to_canonical()
+    };
     info!(%id, %addr, "New connection.");
     let (sender, body) = state.insert(id, addr);
     let html = IndexTemplate { id };

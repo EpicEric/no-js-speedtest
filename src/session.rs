@@ -1,5 +1,5 @@
 use std::{
-    net::SocketAddr,
+    net::IpAddr,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll, ready},
@@ -20,7 +20,7 @@ pub(crate) struct StreamingBody {
     rx: mpsc::Receiver<Bytes>,
     state: AppState,
     id: Uuid,
-    addr: SocketAddr,
+    addr: IpAddr,
 }
 
 impl HttpBody for StreamingBody {
@@ -101,7 +101,7 @@ pub(crate) struct AppState {
 }
 
 impl AppState {
-    pub(crate) fn insert(&self, id: Uuid, addr: SocketAddr) -> (SessionSender, StreamingBody) {
+    pub(crate) fn insert(&self, id: Uuid, addr: IpAddr) -> (SessionSender, StreamingBody) {
         let (tx, rx) = mpsc::channel(128);
         let sender = SessionSender(tx);
         self.conn.insert(
