@@ -26,6 +26,22 @@ pub(crate) fn bps_to_string(mut speed: f64) -> String {
     }
 }
 
+static SIZE_SUFFIX: [&str; 9] = ["B", "K", "M", "G", "T", "P", "E", "Z", "Y"];
+
+pub(crate) fn bytes_to_string(size: usize) -> String {
+    let mut size = size as f64;
+    let mut order_of_magnitude = 0;
+    while size >= 1_000.0 {
+        order_of_magnitude += 1;
+        size /= 1_000.0;
+    }
+    match size {
+        0.0..10.0 => format!("{:.2}{}", size, SIZE_SUFFIX[order_of_magnitude]),
+        10.0..100.0 => format!("{:.1}{}", size, SIZE_SUFFIX[order_of_magnitude]),
+        _ => format!("{}{}", size as u64, SIZE_SUFFIX[order_of_magnitude]),
+    }
+}
+
 pub(crate) fn seconds_to_string(latency: f64) -> String {
     debug_assert!(latency >= 0.0, "speed must be positive");
     let latency_ms = latency * 1_000.0;

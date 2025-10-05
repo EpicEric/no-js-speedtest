@@ -42,7 +42,7 @@ impl HttpBody for DownloadBody {
             let state = self.state.clone();
             let counter = self.counter;
             tokio::spawn(async move {
-                if let Some((sender, download_speed, download_latency, instant)) =
+                if let Some((sender, download, latency, instant)) =
                     state.measure_download_bandwidth(id, instant, size)
                 {
                     let next_size = match counter {
@@ -61,8 +61,8 @@ impl HttpBody for DownloadBody {
                             id,
                             next_size,
                             counter: counter + 1,
-                            download_speed,
-                            download_latency,
+                            download,
+                            latency,
                             timestamp: instant.elapsed().as_secs_f64(),
                         };
                         permit.send(Bytes::from(html.render().unwrap()));

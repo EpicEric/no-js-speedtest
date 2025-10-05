@@ -23,13 +23,22 @@ pub(crate) struct DownloadTemplate {
     pub(crate) next_size: usize,
     pub(crate) counter: usize,
     pub(crate) timestamp: f64,
-    pub(crate) download_speed: String,
-    pub(crate) download_latency: String,
+    pub(crate) download: String,
+    pub(crate) latency: String,
 }
 
 #[derive(Template)]
 #[template(path = "finish_download.html")]
 pub(crate) struct FinishDownloadTemplate {
-    pub(crate) download_speed: String,
-    pub(crate) download_latency: String,
+    pub(crate) download: String,
+    pub(crate) latency: String,
+    pub(crate) max_upload_size: String,
+}
+
+#[derive(Template)]
+#[template(path = "results.html")]
+pub(crate) struct ResultsTemplate {
+    pub(crate) download: String,
+    pub(crate) upload: String,
+    pub(crate) latency: String,
 }

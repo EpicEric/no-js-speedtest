@@ -6,12 +6,12 @@ use std::{
 use askama::Template;
 use axum::{
     body::Body,
-    extract::{ConnectInfo, Path, Query, State},
-    http::{HeaderMap, header},
-    response::IntoResponse,
+    extract::{ConnectInfo, Multipart, Path, Query, State},
+    http::{HeaderMap, StatusCode, header},
+    response::{Html, IntoResponse, Redirect},
 };
 use bytes::Bytes;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 use tracing::info;
 use uuid::Uuid;
@@ -19,7 +19,8 @@ use uuid::Uuid;
 use crate::{
     download::{DOWNLOAD_START_SIZE, DOWNLOAD_TEST_DURATION, DownloadBody},
     session::AppState,
-    templates::{FinishDownloadTemplate, IndexTemplate, StartDownloadTemplate},
+    templates::{FinishDownloadTemplate, IndexTemplate, ResultsTemplate, StartDownloadTemplate},
+    utils::{bps_to_string, calculate_bps},
 };
 
 pub(crate) async fn index(
@@ -69,10 +70,11 @@ pub(crate) async fn start(
         sender.send(Bytes::from(html.render().unwrap())).await;
         tokio::spawn(async move {
             sleep(Duration::from_secs(DOWNLOAD_TEST_DURATION)).await;
-            if let Some((download_speed, download_latency)) = state.stop_download(id) {
+            if let Some((download, latency)) = state.stop_download(id) {
                 let html = FinishDownloadTemplate {
-                    download_speed,
-                    download_latency,
+                    download,
+                    latency,
+                    max_upload_size: state.max_upload_size.clone(),
                 };
                 sender.send(Bytes::from(html.render().unwrap())).await;
                 state.finish(id).await;
@@ -108,5 +110,68 @@ pub(crate) async fn download(
             counter,
             is_end_stream: false,
         }),
+    )
+}
+
+pub(crate) async fn upload(mut multipart: Multipart) -> impl IntoResponse {
+    let start = Instant::now();
+    let mut download = None;
+    let mut latency = None;
+    let mut file_size = None;
+    let mut duration = None;
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        match field.name().unwrap() {
+            "download" => download = field.text().await.ok(),
+            "latency" => latency = field.text().await.ok(),
+            "file" => {
+                while let Ok(Some(chunk)) = field.chunk().await {
+                    file_size = file_size.or(Some(0)).map(|size| size + chunk.len());
+                    duration = Some(start.elapsed());
+                }
+            }
+            _ => (),
+        }
+    }
+    if let (Some(file_size), Some(download), Some(latency), Some(duration)) =
+        (file_size, download, latency, duration)
+    {
+        let upload = bps_to_string(calculate_bps(duration, file_size));
+        let uri = format!(
+            "/results?{}",
+            serde_urlencoded::to_string(ResultsQuery {
+                download,
+                upload,
+                latency
+            })
+            .unwrap()
+        );
+        Redirect::to(&uri).into_response()
+    } else {
+        StatusCode::BAD_REQUEST.into_response()
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct ResultsQuery {
+    download: String,
+    upload: String,
+    latency: String,
+}
+
+pub(crate) async fn results(
+    Query(ResultsQuery {
+        download,
+        upload,
+        latency,
+    }): Query<ResultsQuery>,
+) -> impl IntoResponse {
+    Html(
+        ResultsTemplate {
+            download,
+            upload,
+            latency,
+        }
+        .render()
+        .unwrap(),
     )
 }
