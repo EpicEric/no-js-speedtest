@@ -17,7 +17,7 @@ use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
     download::RANDOM_BITMAP,
-    routes::{download, favicon, index, results, start, upload},
+    routes::{download, favicon, index, privacy, results, start, upload},
     session::AppState,
     utils::bytes_to_string,
 };
@@ -85,6 +85,7 @@ async fn main() -> color_eyre::Result<()> {
 
     let app = Router::new()
         .route("/", get(index))
+        .route("/privacy", get(privacy))
         .route("/favicon.png", get(favicon))
         .route("/empty.jpg", get(async || {}))
         .route("/{id}/start.jpg", get(start))

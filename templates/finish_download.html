@@ -16,7 +16,7 @@
   <form action="/upload" method="post" enctype="multipart/form-data">
     <input name="download" type="text" value="{{ download }}" hidden required />
     <input name="latency" type="text" value="{{ latency }}" hidden required />
-    <label for="file">Maximum size allowed: {{ max_upload_size }}</label>
+    <label for="file">Max: {{ max_upload_size }}</label>
     <input name="file" type="file" required />
     <button type="submit">Get upload speed</button>
   </form>

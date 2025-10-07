@@ -19,7 +19,10 @@ use uuid::Uuid;
 use crate::{
     download::{DOWNLOAD_START_SIZE, DOWNLOAD_TEST_DURATION, DownloadBody},
     session::AppState,
-    templates::{FinishDownloadTemplate, IndexTemplate, ResultsTemplate, StartDownloadTemplate},
+    templates::{
+        FinishDownloadTemplate, IndexTemplate, PrivacyTemplate, ResultsTemplate,
+        StartDownloadTemplate,
+    },
     utils::{bps_to_string, calculate_bps},
 };
 
@@ -54,6 +57,10 @@ pub(crate) async fn favicon() -> impl IntoResponse {
         [(header::CONTENT_TYPE, "image/png")],
         include_bytes!("./favicon.png"),
     )
+}
+
+pub(crate) async fn privacy() -> impl IntoResponse {
+    Html(PrivacyTemplate {}.render().unwrap())
 }
 
 pub(crate) async fn start(
