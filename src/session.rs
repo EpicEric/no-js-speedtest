@@ -152,7 +152,7 @@ impl AppState {
                 latency_total_weights: total_weights,
                 ..
             } = state
-            && counter >= *session_counter
+            && counter == *session_counter + 1
         {
             let latency = (start.elapsed().as_secs_f64() - timestamp) / 2.0;
             let new_weights = *total_weights + 1.0;
@@ -168,6 +168,7 @@ impl AppState {
         id: Uuid,
         instant: Instant,
         size: usize,
+        counter: usize,
     ) -> Option<(SessionSender, String, String, Instant)> {
         if let Some(mut session_data) = self.conn.get_mut(&id)
             && let SessionData { state, sender, .. } = session_data.value_mut()
@@ -176,8 +177,10 @@ impl AppState {
                 bandwidth_average: average,
                 bandwidth_total_weights: total_weights,
                 latency_average,
+                counter: session_counter,
                 ..
             } = state
+            && counter == *session_counter
         {
             let speed = calculate_bps(instant.elapsed(), size);
             let weight = calculate_bandwidth_weight(start.elapsed(), size);
