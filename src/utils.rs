@@ -26,7 +26,7 @@ pub(crate) fn bps_to_string(mut speed: f64) -> String {
     }
 }
 
-static SIZE_SUFFIX: [&str; 9] = ["B", "K", "M", "G", "T", "P", "E", "Z", "Y"];
+static SIZE_SUFFIX: [&str; 9] = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
 
 pub(crate) fn bytes_to_string(size: usize) -> String {
     let mut size = size as f64;

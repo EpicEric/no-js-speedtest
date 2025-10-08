@@ -11,13 +11,18 @@
   <p class="download-speed">Download: {{ download }}</p>
   <p class="download-latency">Latency: {{ latency }}</p>
 </article>
+<hr />
 <article class="upload" aria-label="Upload">
-  <p>You can also find out your upload speed by sending a large file!</p>
+  <p class="status-text">
+    You can also find out your upload speed by sending us a large file!
+  </p>
   <form action="/upload" method="post" enctype="multipart/form-data">
     <input name="download" type="text" value="{{ download }}" hidden required />
     <input name="latency" type="text" value="{{ latency }}" hidden required />
-    <label for="file">Max: {{ max_upload_size }}</label>
-    <input name="file" type="file" required />
+    <label class="file-upload">
+      <input class="hidden-element" name="file" type="file" required />
+      Max: {{ max_upload_size }}
+    </label>
     <button type="submit">Get upload speed</button>
   </form>
 </article>

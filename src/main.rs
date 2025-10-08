@@ -51,7 +51,7 @@ async fn main() -> color_eyre::Result<()> {
     let image_width: u32 = 5_000;
     let image_height: u32 = 5_000;
     let server_port: u16 = 3000;
-    let max_upload_size: usize = 200_000_000;
+    let max_upload_size: usize = 250_000_000;
 
     if ExtendedColorType::Rgba8.bits_per_pixel() as usize
         * image_width as usize
