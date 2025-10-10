@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  {% include "fragments/head.html" %}
+  <body>
+    {% include "fragments/footer.html" %}
+    <main>
+      <h1>NoJS Speedtest</h1>
+      <div>
+        <article class="results" aria-label="Results">
+          <p class="status-text">Test results:</p>
+          <p class="download-speed">Download: {{ download }}</p>
+          <p class="upload-speed">Upload: {{ upload }}</p>
+          <p class="download-latency">Latency: {{ latency }}</p>
+          <form action="/" method="get">
+            <button type="submit">Start over</button>
+          </form>
+        </article>
+      </div>
+    </main>
+  </body>
+</html>

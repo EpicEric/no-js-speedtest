@@ -98,6 +98,7 @@ pub(crate) struct SessionData {
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) conn: Arc<DashMap<Uuid, SessionData, RandomState>>,
+    pub(crate) max_upload_size: String,
 }
 
 impl AppState {
