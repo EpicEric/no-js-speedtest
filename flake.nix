@@ -1,118 +1,63 @@
 {
   description = "Speedtest webapp that doesn't use any JavaScript";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    crane.url = "github:ipetkov/crane";
-    flake-utils.url = "github:numtide/flake-utils";
-    rust-overlay = {
-      url = "github:oxalica/rust-overlay";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-  };
+  inputs = { };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      crane,
-      flake-utils,
-      rust-overlay,
-      ...
-    }:
-    flake-utils.lib.eachDefaultSystem (
+    { self, ... }:
+    let
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
+
+      eachSystem =
+        f:
+        (builtins.foldl' (
+          acc: system:
+          let
+            fSystem = f system;
+          in
+          builtins.foldl' (
+            acc': attr:
+            acc'
+            // {
+              ${attr} = (acc'.${attr} or { }) // fSystem.${attr};
+            }
+          ) acc (builtins.attrNames fSystem)
+        ) { } systems);
+    in
+    eachSystem (
       system:
       let
-        rustChannel = "stable";
-        rustVersion = "latest";
-
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [ (import rust-overlay) ];
-        };
-
+        inherit (import ./nix { inherit system; })
+          pkgs
+          packages
+          checks
+          shell
+          ;
         inherit (pkgs) lib;
-
-        craneLib = (crane.mkLib pkgs).overrideToolchain (
-          pkgs: pkgs.rust-bin.${rustChannel}.${rustVersion}.default
-        );
-
-        src = lib.fileset.toSource {
-          root = ./.;
-          fileset = lib.fileset.unions [
-            (craneLib.fileset.commonCargoSources ./.)
-            ./src/favicon.png
-            ./templates
-          ];
-        };
-
-        commonArgs = {
-          inherit src;
-          strictDeps = true;
-
-          nativeBuildInputs = [
-            pkgs.cmake
-            pkgs.perl
-          ];
-        };
-
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-
-        no-js-speedtest =
-          (craneLib.buildPackage (
-            commonArgs
-            // {
-              inherit cargoArtifacts;
-              doCheck = false;
-            }
-          ))
-          // {
-            meta.mainProgram = "no-js-speedtest";
-          };
       in
       {
-        packages = {
-          inherit no-js-speedtest;
-          default = no-js-speedtest;
-        };
+        packages.${system} = packages;
 
-        apps.default = (
-          flake-utils.lib.mkApp {
-            drv = no-js-speedtest;
-          }
-        );
-
-        checks = {
-          inherit no-js-speedtest;
-
-          no-js-speedtest-clippy = craneLib.cargoClippy (
-            commonArgs
-            // {
-              inherit cargoArtifacts;
-            }
-          );
-
-          no-js-speedtest-doc = craneLib.cargoDoc (
-            commonArgs
-            // {
-              inherit cargoArtifacts;
-            }
-          );
-
-          no-js-speedtest-fmt = craneLib.cargoFmt {
-            inherit src;
+        apps.${system}.default = {
+          type = "app";
+          program = lib.getExe self.packages.${system}.default;
+          meta = {
+            name = "no-js-speedtest";
+            description = "Speedtest webapp that doesn't use any JavaScript";
+            license = lib.licenses.mit;
+            mainProgram = "no-js-speedtest";
+            platforms = lib.platforms.linux;
           };
         };
 
-        devShells.default = craneLib.devShell {
-          checks = self.checks.${system};
+        checks.${system} = checks;
 
-          inputsFrom = [ no-js-speedtest ];
-
-          packages = [
-            pkgs.bacon
-          ];
-        };
+        devShells.${system}.default = shell;
       }
     );
 }
