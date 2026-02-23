@@ -29,11 +29,6 @@ let
   commonArgs = {
     inherit src;
     strictDeps = true;
-
-    nativeBuildInputs = [
-      pkgs.cmake
-      pkgs.perl
-    ];
   };
 
   cargoArtifacts = craneLib.buildDepsOnly commonArgs;
@@ -43,7 +38,7 @@ let
     // {
       inherit cargoArtifacts;
       doCheck = false;
-      meta.mainProgram = "sandhole";
+      meta.mainProgram = "no-js-speedtest";
     }
   );
 in
