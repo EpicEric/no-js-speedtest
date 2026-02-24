@@ -17,7 +17,7 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::{
-    download::{DOWNLOAD_START_SIZE, DOWNLOAD_TEST_DURATION, DownloadBody},
+    download::{DOWNLOAD_START_SIZE, DOWNLOAD_TEST_DURATION, DownloadBody, DownloadState},
     session::AppState,
     templates::{
         FinishDownloadTemplate, IndexTemplate, PrivacyTemplate, ResultsTemplate,
@@ -111,11 +111,11 @@ pub(crate) async fn download(
         [(header::CONTENT_TYPE, "image/bmp")],
         Body::new(DownloadBody {
             instant: Instant::now(),
-            state,
+            app_state: state,
             id,
             size,
             counter,
-            is_end_stream: false,
+            download_state: DownloadState::Waiting,
         }),
     )
 }

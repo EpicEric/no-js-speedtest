@@ -1,15 +1,13 @@
-use std::{
-    net::{Ipv6Addr, SocketAddr},
-    sync::Arc,
-};
+use std::{net::Ipv6Addr, sync::Arc};
 
 use axum::{
-    Router,
-    extract::DefaultBodyLimit,
+    Extension, Router,
+    extract::{ConnectInfo, DefaultBodyLimit},
     routing::{get, post},
 };
 use bytes::Bytes;
 use color_eyre::eyre::{Context, eyre};
+use hyper_util::{rt::TokioIo, service::TowerToHyperService};
 use image::{ExtendedColorType, codecs::bmp::BmpEncoder};
 use rand::RngCore;
 use tracing::{error, info};
@@ -104,13 +102,16 @@ async fn main() -> color_eyre::Result<()> {
         .await
         .wrap_err_with(|| format!("failed to listen on port {server_port}"))?;
     info!(
-        address = format!("http://0.0.0.0:{server_port}"),
+        address = format!("http://[::]:{server_port}"),
         "Starting server..."
     );
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .wrap_err_with(|| "server closed")
+    while let Ok((tcp_stream, addr)) = listener.accept().await {
+        let service = app.clone().layer(Extension(ConnectInfo(addr)));
+        tokio::spawn(async move {
+            let _ = hyper::server::conn::http1::Builder::new()
+                .serve_connection(TokioIo::new(tcp_stream), TowerToHyperService::new(service))
+                .await;
+        });
+    }
+    Ok(())
 }

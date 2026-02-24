@@ -13,6 +13,8 @@ bytes = "1.10.1"
 color-eyre = "0.6.5"
 dashmap = "6.1.0"
 http-body = "1.0.1"
+hyper = { version = "1.8.1", features = ["http1"] }
+hyper-util = { version = "0.1.20", features = ["service"] }
 image = "0.25.8"
 rand = "0.9.2"
 serde = { version = "1.0.228", features = ["derive"] }
