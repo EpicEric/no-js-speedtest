@@ -84,7 +84,7 @@ async fn main() -> color_eyre::Result<()> {
     let app = Router::new()
         .route("/", get(index))
         .route("/privacy", get(privacy))
-        .route("/favicon.png", get(favicon))
+        .route("/favicon.svg", get(favicon))
         .route("/empty.jpg", get(async || {}))
         .route("/{id}/start.jpg", get(start))
         .route("/{id}/download.bmp", get(download))

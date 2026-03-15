@@ -2,7 +2,6 @@ use std::{
     pin::Pin,
     sync::OnceLock,
     task::{Context, Poll},
-    time::Instant,
 };
 
 use askama::Template;
@@ -21,7 +20,6 @@ pub(crate) enum DownloadState {
 }
 
 pub(crate) struct DownloadBody {
-    pub(crate) instant: Instant,
     pub(crate) app_state: AppState,
     pub(crate) id: Uuid,
     pub(crate) size: usize,
@@ -51,13 +49,12 @@ impl HttpBody for DownloadBody {
             DownloadState::Polled => {
                 self.download_state = DownloadState::Done;
                 let id = self.id;
-                let instant = self.instant;
                 let size = self.size;
                 let state = self.app_state.clone();
                 let counter = self.counter;
                 tokio::spawn(async move {
                     if let Some((sender, download, latency, instant)) =
-                        state.measure_download_bandwidth(id, instant, size, counter)
+                        state.measure_download_bandwidth(id, size, counter)
                     {
                         let next_size = match counter {
                             0 => 20_000_000,

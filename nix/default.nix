@@ -21,7 +21,7 @@ let
     root = ../.;
     fileset = lib.fileset.unions [
       (craneLib.fileset.commonCargoSources ../.)
-      ../src/favicon.png
+      ../src/favicon.svg
       ../templates
     ];
   };

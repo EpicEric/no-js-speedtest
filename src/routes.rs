@@ -54,8 +54,8 @@ pub(crate) async fn index(
 
 pub(crate) async fn favicon() -> impl IntoResponse {
     (
-        [(header::CONTENT_TYPE, "image/png")],
-        include_bytes!("./favicon.png"),
+        [(header::CONTENT_TYPE, "image/svg+xml")],
+        include_bytes!("./favicon.svg"),
     )
 }
 
@@ -110,7 +110,6 @@ pub(crate) async fn download(
     (
         [(header::CONTENT_TYPE, "image/bmp")],
         Body::new(DownloadBody {
-            instant: Instant::now(),
             app_state: state,
             id,
             size,

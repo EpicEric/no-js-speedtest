@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::utils::{bps_to_string, calculate_bandwidth_weight, calculate_bps, seconds_to_string};
+use crate::utils::{bps_to_string, seconds_to_string};
 
 pub(crate) struct StreamingBody {
     rx: mpsc::Receiver<Bytes>,
@@ -55,8 +55,8 @@ pub(crate) enum SessionState {
     Downloading {
         start: Instant,
         counter: usize,
-        bandwidth_average: f64,
-        bandwidth_total_weights: f64,
+        bandwidth_total: usize,
+        bandwidth_elapsed: f64,
         latency_average: f64,
         latency_total_weights: f64,
     },
@@ -132,8 +132,8 @@ impl AppState {
             *state = SessionState::Downloading {
                 start,
                 counter: 0,
-                bandwidth_average: 0.0,
-                bandwidth_total_weights: 0.0,
+                bandwidth_total: 0,
+                bandwidth_elapsed: 0.000001,
                 latency_average: 0.0,
                 latency_total_weights: 0.0,
             };
@@ -167,7 +167,6 @@ impl AppState {
     pub(crate) fn measure_download_bandwidth(
         &self,
         id: Uuid,
-        instant: Instant,
         size: usize,
         counter: usize,
     ) -> Option<(SessionSender, String, String, Instant)> {
@@ -175,23 +174,19 @@ impl AppState {
             && let SessionData { state, sender, .. } = session_data.value_mut()
             && let SessionState::Downloading {
                 start,
-                bandwidth_average: average,
-                bandwidth_total_weights: total_weights,
+                bandwidth_total,
+                bandwidth_elapsed,
                 latency_average,
                 counter: session_counter,
                 ..
             } = state
             && counter == *session_counter
         {
-            let speed = calculate_bps(instant.elapsed(), size);
-            let weight = calculate_bandwidth_weight(start.elapsed(), size);
-            let new_weights = *total_weights + weight;
-            let new_average = (*average * *total_weights + speed * weight) / new_weights;
-            *average = new_average;
-            *total_weights = new_weights;
+            *bandwidth_total += size;
+            *bandwidth_elapsed = start.elapsed().as_secs_f64();
             Some((
                 sender.clone(),
-                bps_to_string(*average),
+                bps_to_string(((*bandwidth_total * 8) as f64) / *bandwidth_elapsed),
                 seconds_to_string(*latency_average),
                 *start,
             ))
@@ -204,12 +199,14 @@ impl AppState {
         if let Some(mut session_data) = self.conn.get_mut(&id)
             && let SessionData { state, .. } = session_data.value_mut()
             && let SessionState::Downloading {
-                bandwidth_average,
+                bandwidth_total,
+                bandwidth_elapsed,
                 latency_average,
                 ..
             } = state
         {
-            let download_bandwidth = bps_to_string(*bandwidth_average);
+            let download_bandwidth =
+                bps_to_string(((*bandwidth_total * 8) as f64) / *bandwidth_elapsed);
             let download_latency = seconds_to_string(*latency_average);
             *state = SessionState::End;
             Some((download_bandwidth, download_latency))
